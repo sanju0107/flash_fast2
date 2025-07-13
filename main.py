@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -533,6 +534,10 @@ async def get_difficulty_levels():
         "default": "medium"
     }
 
-# For local development
+# Get port from environment variable or default to 8000
+port = int(os.environ.get("PORT", 8000))
+host = os.environ.get("HOST", "0.0.0.0")
+
+# For deployment
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=host, port=port)
