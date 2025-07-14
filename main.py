@@ -246,8 +246,7 @@ async def get_subjects():
 async def get_difficulty_levels():
     return {"levels": ["easy", "medium", "hard"], "default": "medium"}
 
-# Run the app
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))  # Render default
     host = os.environ.get("HOST", "0.0.0.0")
     uvicorn.run(app, host=host, port=port)
