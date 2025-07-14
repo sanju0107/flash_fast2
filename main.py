@@ -118,7 +118,7 @@ class EnhancedFlashcardGenerator:
                     'type': 'fact',
                     'question': f"In what year did the following occur: {context.replace(year, '___')}?",
                     'answer': year,
-                    'confidence': 0.85
+                    'confidence_score': 0.85
                 })
         
         # Extract proper nouns (names, places)
@@ -132,7 +132,7 @@ class EnhancedFlashcardGenerator:
                         'type': 'fact',
                         'question': f"Who or what is being referred to: {context.replace(name, '___')}?",
                         'answer': name,
-                        'confidence': 0.75
+                        'confidence_score': 0.75
                     })
         
         # Extract numbers with units
@@ -145,7 +145,7 @@ class EnhancedFlashcardGenerator:
                     'type': 'fact',
                     'question': f"What is the measurement: {context.replace(f'{number} {unit}', '___')}?",
                     'answer': f"{number} {unit}",
-                    'confidence': 0.8
+                    'confidence_score': 0.8
                 })
         
         return facts
@@ -187,35 +187,35 @@ class EnhancedFlashcardGenerator:
                 'type': 'definition',
                 'question': f"What is {term1}?",
                 'answer': term2,
-                'confidence': confidence_scores[card_type]
+                'confidence_score': confidence_scores[card_type]
             }
         elif card_type == 'causation':
             return {
                 'type': 'causation',
                 'question': f"What causes {term2}?",
                 'answer': term1,
-                'confidence': confidence_scores[card_type]
+                'confidence_score': confidence_scores[card_type]
             }
         elif card_type == 'comparison':
             return {
                 'type': 'comparison',
                 'question': f"How does {term1} compare to {term2}?",
                 'answer': f"{term1} is different from {term2}",
-                'confidence': confidence_scores[card_type]
+                'confidence_score': confidence_scores[card_type]
             }
         elif card_type == 'process':
             return {
                 'type': 'process',
                 'question': f"What does {term1} involve?",
                 'answer': term2,
-                'confidence': confidence_scores[card_type]
+                'confidence_score': confidence_scores[card_type]
             }
         elif card_type == 'classification':
             return {
                 'type': 'classification',
                 'question': f"What are the types of {term1}?",
                 'answer': term2,
-                'confidence': confidence_scores[card_type]
+                'confidence_score': confidence_scores[card_type]
             }
         
         return None
@@ -246,7 +246,7 @@ class EnhancedFlashcardGenerator:
                         'type': 'concept',
                         'question': f"What is significant about: {concept}?",
                         'answer': sentence,
-                        'confidence': 0.7
+                        'confidence_score': 0.7
                     })
         
         return concepts
@@ -301,7 +301,7 @@ class EnhancedFlashcardGenerator:
             'concept': 7
         }
         
-        unique_cards.sort(key=lambda x: (type_priority.get(x['type'], 8), -x['confidence']))
+        unique_cards.sort(key=lambda x: (type_priority.get(x['type'], 8), -x['confidence_score']))
         
         return unique_cards
     
