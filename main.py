@@ -1,9 +1,8 @@
 import os
 import re
 import time
-import string
 from datetime import datetime
-from typing import List, Dict, Optional, Any, Tuple, Set
+from typing import List, Dict, Optional, Any
 from collections import defaultdict, Counter
 
 from fastapi import FastAPI, HTTPException
@@ -13,7 +12,7 @@ import uvicorn
 import openai
 
 # FastAPI app
-app = FastAPI(title="Advanced Flashcard API", version="2.2.0")
+app = FastAPI(title="Intelligent Flashcard API", version="3.0.0")
 
 # CORS
 app.add_middleware(
@@ -26,7 +25,7 @@ app.add_middleware(
 
 # Models
 class FlashcardRequest(BaseModel):
-    content: str = Field(..., min_length=100, max_length=10000)
+    content: str = Field(..., min_length=100, max_length=30000)
     subject: Optional[str] = None
     max_flashcards: Optional[int] = Field(50, ge=10, le=100)
     difficulty_level: Optional[str] = Field("medium")
@@ -51,97 +50,28 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
 
-# Full AdvancedFlashcardGenerator logic
-class AdvancedFlashcardGenerator:
+# Generator class
+class SmartFlashcardGenerator:
     def __init__(self):
-        self.subjects = {
-            'science': ['experiment', 'theory', 'research', 'chemical', 'energy', 'reaction'],
-            'history': ['empire', 'battle', 'independence', 'colonial', 'treaty'],
-            'geography': ['climate', 'river', 'continent', 'desert', 'mountain'],
-            'economics': ['inflation', 'market', 'trade', 'investment', 'tax'],
-        }
-        self.stop_words = set("""
-            a an the and or but if in on with to of for at by from as is are was were be been being
-        """.split())
-
-    def extract_sentences(self, content: str) -> List[str]:
-        return [s.strip() for s in re.split(r'[.!?]', content) if len(s.strip()) > 30]
-
-    def extract_key_terms(self, content: str) -> List[str]:
-        words = re.findall(r'\b\w{4,}\b', content.lower())
-        return [w for w in words if w not in self.stop_words][:20]
-
-    def create_definition_cards(self, sentences: List[str]) -> List[Dict]:
-        cards = []
-        for s in sentences:
-            match = re.match(r'(.*?)\s+is\s+(.*)', s, re.IGNORECASE)
-            if match:
-                term, definition = match.groups()
-                cards.append({
-                    'type': 'definition',
-                    'question': f"What is {term.strip()}?",
-                    'answer': definition.strip(),
-                    'confidence_score': 0.9,
-                    'educational_value': 0.8
-                })
-        return cards
-
-    def rank_and_filter_cards(self, cards: List[Dict], max_cards: int) -> List[Dict]:
-        seen = set()
-        unique = []
-        for card in cards:
-            q = card['question'].lower()
-            if q not in seen:
-                seen.add(q)
-                unique.append(card)
-        return unique[:max_cards]
-
-    def generate_flashcards(self, content: str, subject: Optional[str] = None,
-                            max_flashcards: int = 50, difficulty: str = "medium") -> Dict:
-        start = time.time()
-        try:
-            sentences = self.extract_sentences(content)
-            key_terms = self.extract_key_terms(content)
-            cards = self.create_definition_cards(sentences)
-            final_cards = self.rank_and_filter_cards(cards, max_flashcards)
-            return {
-                'flashcards': final_cards,
-                'metadata': {
-                    'subject': subject or 'general',
-                    'key_terms': key_terms,
-                    'sentence_count': len(sentences),
-                    'final_count': len(final_cards)
-                },
-                'performance': {
-                    'processing_time': time.time() - start
-                },
-                'success': True,
-                'message': f"Generated {len(final_cards)} flashcards"
-            }
-        except Exception as e:
-            return {'success': False, 'message': str(e), 'flashcards': [], 'metadata': {}, 'performance': {}}
-
-class HybridFlashcardGenerator(AdvancedFlashcardGenerator):
-    def __init__(self):
-        super().__init__()
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         if self.openai_api_key:
             openai.api_key = self.openai_api_key
 
-    def generate_llm_flashcards(self, content: str, max_cards: int = 5) -> List[Dict]:
+    def generate_with_openai(self, content: str, max_cards: int = 10) -> List[Dict]:
         if not self.openai_api_key:
             return []
 
         prompt = (
-            f"Generate {max_cards} educational flashcards from the text below. "
-            f"Each flashcard should include a question and answer.\n\nText:\n{content[:4000]}"
+            f"Generate {max_cards} highly educational, exam-focused flashcards from the following text. "
+            f"Each flashcard must have a concise and clear question and answer. Format as:\n"
+            f"Question: ...\nAnswer: ...\n\nText:\n{content[:6000]}"
         )
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.4,
-                max_tokens=1000,
+                temperature=0.3,
+                max_tokens=1500,
             )
             text = response.choices[0].message.content
             cards = []
@@ -151,51 +81,67 @@ class HybridFlashcardGenerator(AdvancedFlashcardGenerator):
                     "type": "llm",
                     "question": question.strip(),
                     "answer": answer.strip(),
-                    "confidence_score": 0.95,
-                    "educational_value": 0.9
+                    "confidence_score": 0.95
                 })
             return cards
         except Exception as e:
-            print("LLM generation error:", e)
+            print("OpenAI error:", e)
             return []
 
-    def generate_flashcards(self, content: str, subject: Optional[str] = None,
-                            max_flashcards: int = 50, difficulty: str = "medium") -> Dict:
-        base_result = super().generate_flashcards(content, subject, max_flashcards, difficulty)
-        if not base_result["success"]:
-            return base_result
+    def generate_rule_based(self, content: str, max_cards: int = 20) -> List[Dict]:
+        sentences = re.split(r'(?<=[.!?])\s+', content)
+        cards = []
+        for sentence in sentences:
+            if ' is ' in sentence and len(sentence.split()) > 5:
+                parts = sentence.split(' is ', 1)
+                question = f"What is {parts[0].strip()}?"
+                answer = parts[1].strip().rstrip('.').capitalize()
+                cards.append({
+                    "type": "definition",
+                    "question": question,
+                    "answer": answer,
+                    "confidence_score": 0.7
+                })
+            if len(cards) >= max_cards:
+                break
+        return cards
 
-        try:
-            llm_cards = self.generate_llm_flashcards(content, max_cards=5)
-            for card in llm_cards:
-                card["subject"] = subject or base_result["metadata"].get("subject", "general")
-                card["difficulty"] = difficulty
-            base_result["flashcards"].extend(llm_cards)
-            base_result["metadata"]["llm_cards"] = len(llm_cards)
-            base_result["metadata"]["final_count"] += len(llm_cards)
-            base_result["message"] += f" (plus {len(llm_cards)} enhanced via OpenAI)"
-        except Exception as e:
-            base_result["message"] += f" (OpenAI fallback due to error: {str(e)})"
-        return base_result
+    def generate_flashcards(self, content: str, subject: Optional[str] = None, max_flashcards: int = 50, difficulty: str = "medium") -> Dict:
+        start = time.time()
+        rule_cards = self.generate_rule_based(content, max_cards=max_flashcards // 2)
+        llm_cards = self.generate_with_openai(content, max_cards=max_flashcards - len(rule_cards))
 
-# Use hybrid generator
-generator = HybridFlashcardGenerator()
+        flashcards = rule_cards + llm_cards
+        for card in flashcards:
+            card['subject'] = subject or "general"
+            card['difficulty'] = difficulty
+
+        return {
+            "flashcards": flashcards,
+            "metadata": {
+                "subject": subject or "general",
+                "rule_based": len(rule_cards),
+                "llm_based": len(llm_cards),
+                "final_count": len(flashcards)
+            },
+            "performance": {
+                "processing_time": time.time() - start,
+                "flashcards_per_second": len(flashcards) / max(time.time() - start, 0.1)
+            },
+            "success": True,
+            "message": f"Generated {len(flashcards)} flashcards including AI-refined ones"
+        }
+
+# Initialize generator
+generator = SmartFlashcardGenerator()
 
 @app.get("/", response_model=HealthResponse)
 async def root():
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat(),
-        version="2.2.0"
-    )
+    return HealthResponse(status="healthy", timestamp=datetime.now().isoformat(), version="3.0.0")
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat(),
-        version="2.2.0"
-    )
+    return HealthResponse(status="healthy", timestamp=datetime.now().isoformat(), version="3.0.0")
 
 @app.post("/generate-flashcards", response_model=GenerationResult)
 async def generate_flashcards(request: FlashcardRequest):
@@ -210,12 +156,7 @@ async def generate_flashcards(request: FlashcardRequest):
             difficulty=request.difficulty_level
         )
 
-        if not result['success']:
-            raise HTTPException(status_code=500, detail=result['message'])
-
-        flashcard_responses = [
-            FlashcardResponse(**card) for card in result['flashcards']
-        ]
+        flashcard_responses = [FlashcardResponse(**card) for card in result['flashcards']]
 
         return GenerationResult(
             flashcards=flashcard_responses,
@@ -224,7 +165,6 @@ async def generate_flashcards(request: FlashcardRequest):
             success=result['success'],
             message=result['message']
         )
-
     except HTTPException:
         raise
     except Exception as e:
@@ -232,7 +172,7 @@ async def generate_flashcards(request: FlashcardRequest):
 
 @app.get("/subjects")
 async def get_subjects():
-    return {"subjects": list(generator.subjects.keys()), "default": "general"}
+    return {"subjects": ["history", "science", "technology", "general"], "default": "general"}
 
 @app.get("/difficulty-levels")
 async def get_difficulty_levels():
