@@ -51,10 +51,77 @@ class HealthResponse(BaseModel):
     timestamp: str
     version: str
 
-# Generator instance
-from flashcard_generator import AdvancedFlashcardGenerator as BaseGenerator
+# Full AdvancedFlashcardGenerator logic
+class AdvancedFlashcardGenerator:
+    def __init__(self):
+        self.subjects = {
+            'science': ['experiment', 'theory', 'research', 'chemical', 'energy', 'reaction'],
+            'history': ['empire', 'battle', 'independence', 'colonial', 'treaty'],
+            'geography': ['climate', 'river', 'continent', 'desert', 'mountain'],
+            'economics': ['inflation', 'market', 'trade', 'investment', 'tax'],
+        }
+        self.stop_words = set("""
+            a an the and or but if in on with to of for at by from as is are was were be been being
+        """.split())
 
-class HybridFlashcardGenerator(BaseGenerator):
+    def extract_sentences(self, content: str) -> List[str]:
+        return [s.strip() for s in re.split(r'[.!?]', content) if len(s.strip()) > 30]
+
+    def extract_key_terms(self, content: str) -> List[str]:
+        words = re.findall(r'\b\w{4,}\b', content.lower())
+        return [w for w in words if w not in self.stop_words][:20]
+
+    def create_definition_cards(self, sentences: List[str]) -> List[Dict]:
+        cards = []
+        for s in sentences:
+            match = re.match(r'(.*?)\s+is\s+(.*)', s, re.IGNORECASE)
+            if match:
+                term, definition = match.groups()
+                cards.append({
+                    'type': 'definition',
+                    'question': f"What is {term.strip()}?",
+                    'answer': definition.strip(),
+                    'confidence_score': 0.9,
+                    'educational_value': 0.8
+                })
+        return cards
+
+    def rank_and_filter_cards(self, cards: List[Dict], max_cards: int) -> List[Dict]:
+        seen = set()
+        unique = []
+        for card in cards:
+            q = card['question'].lower()
+            if q not in seen:
+                seen.add(q)
+                unique.append(card)
+        return unique[:max_cards]
+
+    def generate_flashcards(self, content: str, subject: Optional[str] = None,
+                            max_flashcards: int = 50, difficulty: str = "medium") -> Dict:
+        start = time.time()
+        try:
+            sentences = self.extract_sentences(content)
+            key_terms = self.extract_key_terms(content)
+            cards = self.create_definition_cards(sentences)
+            final_cards = self.rank_and_filter_cards(cards, max_flashcards)
+            return {
+                'flashcards': final_cards,
+                'metadata': {
+                    'subject': subject or 'general',
+                    'key_terms': key_terms,
+                    'sentence_count': len(sentences),
+                    'final_count': len(final_cards)
+                },
+                'performance': {
+                    'processing_time': time.time() - start
+                },
+                'success': True,
+                'message': f"Generated {len(final_cards)} flashcards"
+            }
+        except Exception as e:
+            return {'success': False, 'message': str(e), 'flashcards': [], 'metadata': {}, 'performance': {}}
+
+class HybridFlashcardGenerator(AdvancedFlashcardGenerator):
     def __init__(self):
         super().__init__()
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -63,7 +130,7 @@ class HybridFlashcardGenerator(BaseGenerator):
 
     def generate_llm_flashcards(self, content: str, max_cards: int = 5) -> List[Dict]:
         if not self.openai_api_key:
-            return []  # Skip LLM generation if key is not set
+            return []
 
         prompt = (
             f"Generate {max_cards} educational flashcards from the text below. "
@@ -95,7 +162,6 @@ class HybridFlashcardGenerator(BaseGenerator):
     def generate_flashcards(self, content: str, subject: Optional[str] = None,
                             max_flashcards: int = 50, difficulty: str = "medium") -> Dict:
         base_result = super().generate_flashcards(content, subject, max_flashcards, difficulty)
-
         if not base_result["success"]:
             return base_result
 
@@ -104,16 +170,13 @@ class HybridFlashcardGenerator(BaseGenerator):
             for card in llm_cards:
                 card["subject"] = subject or base_result["metadata"].get("subject", "general")
                 card["difficulty"] = difficulty
-
             base_result["flashcards"].extend(llm_cards)
             base_result["metadata"]["llm_cards"] = len(llm_cards)
             base_result["metadata"]["final_count"] += len(llm_cards)
             base_result["message"] += f" (plus {len(llm_cards)} enhanced via OpenAI)"
         except Exception as e:
             base_result["message"] += f" (OpenAI fallback due to error: {str(e)})"
-
         return base_result
-
 
 # Use hybrid generator
 generator = HybridFlashcardGenerator()
